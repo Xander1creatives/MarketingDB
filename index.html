@@ -44,7 +44,7 @@
             const password = document.getElementById('loginPassword').value;
             const errorDiv = document.getElementById('loginError');
             errorDiv.classList.add('hidden');
-            
+
             const { error } = await window.supabase.auth.signInWithPassword({ email, password });
             if (error) {
                 errorDiv.innerText = error.message;
@@ -52,21 +52,19 @@
                 showToast(error.message);
                 return;
             }
-            
-            // After successful login, fetch profile
+
             const { data: { session } } = await window.supabase.auth.getSession();
-            let { data: profile, error: profileError } = await window.supabase
-                .from('profiles')
-                .select('role, approved, full_name')
+            let { data: userData, error: userError } = await window.supabase
+                .from('users')
+                .select('*')
                 .eq('id', session.user.id)
                 .single();
-            
-            // If profile missing, create it now (fallback)
-            if (profileError && profileError.code === 'PGRST116') { // "Row not found"
-                console.log('Profile missing, creating now...');
+
+            // Fallback: if user row missing, create it (e.g., if admin manually added user)
+            if (userError && userError.code === 'PGRST116') {
                 const fullName = session.user.user_metadata?.full_name || email.split('@')[0];
                 const { error: insertError } = await window.supabase
-                    .from('profiles')
+                    .from('users')
                     .insert([{
                         id: session.user.id,
                         email: email,
@@ -76,42 +74,35 @@
                         avatar_url: null
                     }]);
                 if (insertError) {
-                    console.error('Failed to create missing profile:', insertError);
-                    errorDiv.innerText = 'Profile error. Please contact support.';
+                    console.error(insertError);
+                    errorDiv.innerText = 'User record missing. Contact support.';
                     errorDiv.classList.remove('hidden');
                     await window.supabase.auth.signOut();
                     return;
                 }
-                // Re-fetch the newly created profile
-                const { data: newProfile } = await window.supabase
-                    .from('profiles')
-                    .select('role, approved')
+                const { data: newUser } = await window.supabase
+                    .from('users')
+                    .select('*')
                     .eq('id', session.user.id)
                     .single();
-                profile = newProfile;
-            } else if (profileError) {
-                console.error('Profile fetch error:', profileError);
-                errorDiv.innerText = 'Profile fetch error. Please contact support.';
+                userData = newUser;
+            } else if (userError) {
+                console.error(userError);
+                errorDiv.innerText = 'Error fetching user data.';
                 errorDiv.classList.remove('hidden');
                 await window.supabase.auth.signOut();
                 return;
             }
-            
-            // Check approval
-            if (!profile.approved && profile.role !== 'admin') {
+
+            if (!userData.approved && userData.role !== 'admin') {
                 await window.supabase.auth.signOut();
                 errorDiv.innerText = 'Your account is pending admin approval.';
                 errorDiv.classList.remove('hidden');
                 showToast('Account not approved yet.', 'error');
                 return;
             }
-            
-            // Redirect based on role
-            if (profile.role === 'admin') {
-                window.location.href = 'admin-dashboard.html';
-            } else {
-                window.location.href = 'user-dashboard.html';
-            }
+
+            window.location.href = userData.role === 'admin' ? 'admin-dashboard.html' : 'user-dashboard.html';
         });
     </script>
 </body>

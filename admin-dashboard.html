@@ -32,8 +32,8 @@
         }
 
         async function loadAdminDashboard() {
-            const { data: allUsers } = await supabase.from('profiles').select('*').order('created_at');
-            const { data: allClients } = await supabase.from('clients').select(`*, profiles!inner(email, full_name)`);
+            const { data: allUsers } = await supabase.from('users').select('*').order('created_at');
+            const { data: allClients } = await supabase.from('clients').select(`*, users!inner(email, full_name)`);
 
             const container = document.getElementById('adminContent');
             container.innerHTML = `
@@ -74,7 +74,7 @@
                 </li>
             `).join('');
             document.querySelectorAll('.approveUserBtn').forEach(btn => btn.addEventListener('click', async () => {
-                await supabase.from('profiles').update({ approved: true }).eq('id', btn.dataset.id);
+                await supabase.from('users').update({ approved: true }).eq('id', btn.dataset.id);
                 showToast("User approved", "success");
                 loadAdminDashboard();
             }));
