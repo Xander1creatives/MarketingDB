@@ -27,7 +27,9 @@
                     <label class="block text-gray-700 text-sm font-bold mb-2">Password</label>
                     <input type="password" id="loginPassword" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-400" required>
                 </div>
-                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition">Login</button>
+                <button type="submit" id="loginBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg transition">
+                    Login
+                </button>
             </form>
             <div class="mt-4 text-center text-sm">
                 <a href="forgot-password.html" class="text-indigo-600 hover:underline">Forgot password?</a>
@@ -38,71 +40,78 @@
         </div>
     </div>
     <script>
+        const loginBtn = document.getElementById('loginBtn');
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            loginBtn.disabled = true;
+            loginBtn.innerText = 'Logging in...';
+
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
             const errorDiv = document.getElementById('loginError');
             errorDiv.classList.add('hidden');
 
-            const { error } = await window.supabase.auth.signInWithPassword({ email, password });
-            if (error) {
-                errorDiv.innerText = error.message;
-                errorDiv.classList.remove('hidden');
-                showToast(error.message);
-                return;
-            }
+            try {
+                // Step 1: Sign in with email/password
+                const { error } = await window.supabase.auth.signInWithPassword({ email, password });
+                if (error) throw error;
 
-            const { data: { session } } = await window.supabase.auth.getSession();
-            let { data: userData, error: userError } = await window.supabase
-                .from('users')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
+                // Step 2: Get session
+                const { data: { session } } = await window.supabase.auth.getSession();
+                if (!session) throw new Error('No session after login');
 
-            // Fallback: if user row missing, create it (e.g., if admin manually added user)
-            if (userError && userError.code === 'PGRST116') {
-                const fullName = session.user.user_metadata?.full_name || email.split('@')[0];
-                const { error: insertError } = await window.supabase
-                    .from('users')
-                    .insert([{
-                        id: session.user.id,
-                        email: email,
-                        full_name: fullName,
-                        role: 'user',
-                        approved: false,
-                        avatar_url: null
-                    }]);
-                if (insertError) {
-                    console.error(insertError);
-                    errorDiv.innerText = 'User record missing. Contact support.';
-                    errorDiv.classList.remove('hidden');
-                    await window.supabase.auth.signOut();
-                    return;
-                }
-                const { data: newUser } = await window.supabase
+                // Step 3: Try to fetch user record
+                let { data: userData, error: userError } = await window.supabase
                     .from('users')
                     .select('*')
                     .eq('id', session.user.id)
-                    .single();
-                userData = newUser;
-            } else if (userError) {
-                console.error(userError);
-                errorDiv.innerText = 'Error fetching user data.';
-                errorDiv.classList.remove('hidden');
-                await window.supabase.auth.signOut();
-                return;
-            }
+                    .maybeSingle();  // Use maybeSingle to avoid errors when row missing
 
-            if (!userData.approved && userData.role !== 'admin') {
-                await window.supabase.auth.signOut();
-                errorDiv.innerText = 'Your account is pending admin approval.';
-                errorDiv.classList.remove('hidden');
-                showToast('Account not approved yet.', 'error');
-                return;
-            }
+                // Step 4: If user record missing, create it
+                if (!userData) {
+                    const fullName = session.user.user_metadata?.full_name || email.split('@')[0];
+                    const { error: insertError } = await window.supabase
+                        .from('users')
+                        .insert([{
+                            id: session.user.id,
+                            email: email,
+                            full_name: fullName,
+                            role: 'user',
+                            approved: false,
+                            avatar_url: null
+                        }]);
+                    if (insertError) throw new Error('Failed to create user record: ' + insertError.message);
 
-            window.location.href = userData.role === 'admin' ? 'admin-dashboard.html' : 'user-dashboard.html';
+                    // Fetch the newly created record
+                    const { data: newUser, error: fetchError } = await window.supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
+                    if (fetchError) throw new Error('Could not retrieve user record after creation');
+                    userData = newUser;
+                } else if (userError) {
+                    throw userError;
+                }
+
+                // Step 5: Check approval
+                if (!userData.approved && userData.role !== 'admin') {
+                    await window.supabase.auth.signOut();
+                    throw new Error('Your account is pending admin approval.');
+                }
+
+                // Step 6: Redirect based on role
+                window.location.href = userData.role === 'admin' ? 'admin-dashboard.html' : 'user-dashboard.html';
+
+            } catch (err) {
+                console.error('Login error:', err);
+                errorDiv.innerText = err.message;
+                errorDiv.classList.remove('hidden');
+                showToast(err.message, 'error');
+                loginBtn.disabled = false;
+                loginBtn.innerText = 'Login';
+            }
         });
     </script>
 </body>
