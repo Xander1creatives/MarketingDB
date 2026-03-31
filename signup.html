@@ -61,7 +61,7 @@
 
             try {
                 // 1. Create auth user
-                const { data: authData, error: signUpError } = await supabase.signUp({ 
+                const { data: authData, error: signUpError } = await supabase.auth.signUp({ 
                     email, 
                     password,
                     options: {
