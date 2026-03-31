@@ -53,22 +53,27 @@
             errorDiv.classList.add('hidden');
 
             try {
-                // Step 1: Sign in with email/password
+                // Sign in
                 const { error } = await window.supabase.auth.signInWithPassword({ email, password });
-                if (error) throw error;
+                if (error) {
+                    if (error.message === 'Email not confirmed') {
+                        throw new Error('Please confirm your email address before logging in.');
+                    }
+                    throw error;
+                }
 
-                // Step 2: Get session
+                // Get session
                 const { data: { session } } = await window.supabase.auth.getSession();
                 if (!session) throw new Error('No session after login');
 
-                // Step 3: Try to fetch user record
+                // Fetch user record
                 let { data: userData, error: userError } = await window.supabase
                     .from('users')
                     .select('*')
                     .eq('id', session.user.id)
-                    .maybeSingle();  // Use maybeSingle to avoid errors when row missing
+                    .maybeSingle();
 
-                // Step 4: If user record missing, create it
+                // If user record missing (should not happen with trigger), attempt to create it
                 if (!userData) {
                     const fullName = session.user.user_metadata?.full_name || email.split('@')[0];
                     const { error: insertError } = await window.supabase
@@ -81,29 +86,26 @@
                             approved: false,
                             avatar_url: null
                         }]);
-                    if (insertError) throw new Error('Failed to create user record: ' + insertError.message);
-
-                    // Fetch the newly created record
-                    const { data: newUser, error: fetchError } = await window.supabase
+                    if (insertError) throw new Error('User record missing and could not create.');
+                    // Re-fetch
+                    const { data: newUser } = await window.supabase
                         .from('users')
                         .select('*')
                         .eq('id', session.user.id)
                         .single();
-                    if (fetchError) throw new Error('Could not retrieve user record after creation');
                     userData = newUser;
                 } else if (userError) {
                     throw userError;
                 }
 
-                // Step 5: Check approval
+                // Check approval
                 if (!userData.approved && userData.role !== 'admin') {
                     await window.supabase.auth.signOut();
                     throw new Error('Your account is pending admin approval.');
                 }
 
-                // Step 6: Redirect based on role
+                // Redirect
                 window.location.href = userData.role === 'admin' ? 'admin-dashboard.html' : 'user-dashboard.html';
-
             } catch (err) {
                 console.error('Login error:', err);
                 errorDiv.innerText = err.message;

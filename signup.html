@@ -60,36 +60,21 @@
             }
 
             try {
-                // Create auth user
-                const { data: authData, error: signUpError } = await window.supabase.auth.signUp({
+                const { data, error } = await window.supabase.auth.signUp({
                     email,
                     password,
                     options: {
                         data: { full_name: fullName }
                     }
                 });
-                if (signUpError) throw signUpError;
-                if (!authData.user) throw new Error('User creation failed');
+                if (error) throw error;
+                if (!data.user) throw new Error('User creation failed');
 
-                // Insert into users table
-                const { error: userError } = await window.supabase
-                    .from('users')
-                    .insert([{
-                        id: authData.user.id,
-                        email: email,
-                        full_name: fullName,
-                        role: 'user',
-                        approved: false,
-                        avatar_url: null
-                    }]);
+                // Wait a moment to allow trigger to insert the user record
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
-                if (userError) {
-                    console.error(userError);
-                    throw new Error('Account created but user record failed. Contact support.');
-                }
-
-                showToast('Registration successful! Please wait for admin approval.', 'success');
-                setTimeout(() => window.location.href = 'index.html', 2000);
+                showToast('Registration successful! Please check your email to confirm your account.', 'success');
+                setTimeout(() => window.location.href = 'index.html', 3000);
             } catch (err) {
                 console.error(err);
                 let message = err.message;
