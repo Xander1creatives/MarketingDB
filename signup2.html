@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Up</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="utils.js"></script>
+</head>
+<body class="bg-gradient-to-br from-green-50 to-teal-100">
+    <div class="flex min-h-screen items-center justify-center p-4">
+        <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
+            <img src="Hotel-logo-new.png" style="width: 6rem; height: 6rem; margin-left: 9rem;">
+            <h2 class="text-3xl font-bold text-center text-gray-800">Register</h2>
+            <form id="signupForm" class="mt-6">
+                <div class="mb-3"><label class="block text-sm font-medium">Full Name</label><input type="text" id="fullName" class="w-full border rounded-lg p-2" required></div>
+                <div class="mb-3"><label class="block text-sm font-medium">Email</label><input type="email" id="signupEmail" class="w-full border rounded-lg p-2" required></div>
+                <div class="mb-3"><label class="block text-sm font-medium">Password</label><input type="password" id="signupPassword" class="w-full border rounded-lg p-2" required></div>
+                <button type="submit" class="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700">Sign Up</button>
+            </form>
+            <p class="text-center text-sm mt-4">Already have an account? <a href="index.html" class="text-teal-600">Login</a></p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const fullName = document.getElementById('fullName').value;
+            const { data, error } = await supabase.auth.signUp({ email, password });
+            if (error) { showToast(error.message); return; }
+            if (data.user) {
+                await supabase.from('profiles').insert([{
+                    id: data.user.id,
+                    email,
+                    full_name: fullName,
+                    role: 'user',
+                    approved: false,
+                    avatar_url: null
+                }]);
+                showToast("Registration successful! Wait for admin approval.", "success");
+                setTimeout(() => { window.location.href = 'index.html'; }, 2000);
+            }
+        });
+    </script>
+</body>
+</html>
