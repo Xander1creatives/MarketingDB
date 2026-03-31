@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
+    <script src="utils.js"></script>
+    <style>
+        .status-badge { padding: 4px 10px; border-radius: 9999px; font-weight: 500; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 6px; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="max-w-7xl mx-auto p-5">
+        <div id="adminContent">
+            <div class="text-center py-20">Loading...</div>
+        </div>
+    </div>
+
+    <script>
+        let currentProfile = null;
+
+        async function init() {
+            const auth = await requireAuth(['admin']);
+            if (!auth) return;
+            currentProfile = auth.profile;
+            await loadAdminDashboard();
+        }
+
+        async function loadAdminDashboard() {
+            const { data: allUsers } = await supabase.from('profiles').select('*').order('created_at');
+            const { data: allClients } = await supabase.from('clients').select(`*, profiles!inner(email, full_name)`);
+
+            const container = document.getElementById('adminContent');
+            container.innerHTML = `
+                <div class="bg-indigo-900 text-white p-4 rounded-xl flex justify-between items-center mb-6">
+                    <h1 class="text-2xl font-bold"><i class="fas fa-user-shield"></i> Admin Panel</h1>
+                    <button id="adminLogout" class="bg-red-500 px-4 py-2 rounded">Logout</button>
+                </div>
+                <div class="grid md:grid-cols-2 gap-5 mb-6">
+                    <div class="bg-white shadow rounded p-4">
+                        <h2 class="font-bold text-lg">👥 User Approvals</h2>
+                        <ul id="userApprovalList" class="divide-y"></ul>
+                    </div>
+                    <div class="bg-white shadow rounded p-4">
+                        <h2 class="font-bold text-lg">➕ Admin Action: Create Client (Own DB)</h2>
+                        <button id="adminCreateClientBtn" class="bg-green-600 text-white px-4 py-2 rounded mt-2"><i class="fas fa-database"></i> Add New Client</button>
+                    </div>
+                </div>
+                <div class="bg-white shadow rounded p-4 mb-6">
+                    <h2 class="font-bold text-xl">📋 All Clients (All Users & Organizations)</h2>
+                    <button id="exportAllExcel" class="bg-emerald-600 text-white px-3 py-1 rounded float-right mb-2">Export All Excel</button>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full border">
+                            <thead class="bg-gray-100"><tr><th class="p-2">Company</th><th>Category</th><th>Status</th><th>Owner (User)</th><th>Reliability</th><th>Actions</th></tr></thead>
+                            <tbody id="adminClientsTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Admin Add Client Modal -->
+                <div id="adminClientModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50"><div class="bg-white p-6 rounded-xl w-full max-w-md"><h3 class="font-bold text-xl">Add Client (Admin)</h3><form id="adminClientForm"><div class="mb-2"><label>Company Name</label><input id="adminCompName" class="w-full border p-2" required></div><div class="mb-2"><label>Category</label><select id="adminCategory" class="w-full border p-2"><option>private</option><option>government</option><option>NGO</option></select></div><div class="mb-2"><label>Status</label><select id="adminStatus" class="w-full border p-2"><option value="active">Active</option><option value="dormant">Dormant</option></select></div><div class="mb-2"><label>Reliability Score</label><input id="adminReliability" type="number" value="50" class="w-full border p-2"></div><div class="flex justify-end gap-2 mt-3"><button type="button" id="closeAdminModal" class="bg-gray-400 px-3 py-1 rounded">Cancel</button><button type="submit" class="bg-indigo-600 text-white px-3 py-1 rounded">Save</button></div></form></div></div>
+            `;
+
+            // User approval list
+            const approvalList = document.getElementById('userApprovalList');
+            approvalList.innerHTML = allUsers.map(u => `
+                <li class="flex justify-between items-center border-b py-2">
+                    <span>${escapeHtml(u.email)} (${escapeHtml(u.full_name || 'no name')}) - ${u.approved ? '✅ Approved' : '⏳ Pending'}</span>
+                    ${!u.approved ? `<button data-id="${u.id}" class="approveUserBtn bg-blue-500 text-white px-2 py-1 rounded text-xs">Approve</button>` : `<span class="text-green-600 text-xs">Active</span>`}
+                </li>
+            `).join('');
+            document.querySelectorAll('.approveUserBtn').forEach(btn => btn.addEventListener('click', async () => {
+                await supabase.from('profiles').update({ approved: true }).eq('id', btn.dataset.id);
+                showToast("User approved", "success");
+                loadAdminDashboard();
+            }));
+
+            // Clients table
+            const clientsTable = document.getElementById('adminClientsTable');
+            clientsTable.innerHTML = allClients.map(c => `
+                <tr class="border-b">
+                    <td class="p-2">${escapeHtml(c.company_name)}</td>
+                    <td class="p-2">${c.category}</td>
+                    <td class="p-2"><span class="status-badge ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}">${c.status}</span></td>
+                    <td class="p-2">${escapeHtml(c.profiles?.email)}</td>
+                    <td class="p-2">${c.reliability_score || 50}</td>
+                    <td class="p-2"><button data-id="${c.id}" class="adminDelClient text-red-600"><i class="fas fa-trash"></i> Delete</button></td>
+                </tr>
+            `).join('');
+            document.querySelectorAll('.adminDelClient').forEach(btn => btn.addEventListener('click', async () => {
+                if (confirm('Delete client from any user?')) {
+                    await supabase.from('clients').delete().eq('id', btn.dataset.id);
+                    showToast("Deleted", "success");
+                    loadAdminDashboard();
+                }
+            }));
+
+            // Export
+            document.getElementById('exportAllExcel').addEventListener('click', () => {
+                const exportData = allClients.map(c => ({ ...c, owner_email: c.profiles?.email }));
+                exportToExcel(exportData, 'all_clients.xlsx');
+            });
+
+            // Admin add client modal
+            const adminModal = document.getElementById('adminClientModal');
+            document.getElementById('adminCreateClientBtn').onclick = () => { adminModal.classList.remove('hidden'); adminModal.classList.add('flex'); };
+            document.getElementById('closeAdminModal').onclick = () => adminModal.classList.add('hidden');
+            document.getElementById('adminClientForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const newClient = {
+                    company_name: document.getElementById('adminCompName').value,
+                    category: document.getElementById('adminCategory').value,
+                    status: document.getElementById('adminStatus').value,
+                    reliability_score: parseInt(document.getElementById('adminReliability').value),
+                    user_id: currentProfile.id,
+                    contact_person: 'Admin',
+                    email: 'admin@system.local'
+                };
+                await supabase.from('clients').insert(newClient);
+                showToast("Client created as admin", "success");
+                adminModal.classList.add('hidden');
+                loadAdminDashboard();
+            });
+
+            document.getElementById('adminLogout').addEventListener('click', logoutAndRedirect);
+        }
+
+        init();
+    </script>
+</body>
+</html>
