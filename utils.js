@@ -19,30 +19,30 @@ function exportToExcel(data, filename) {
 
 // Logout function (redirect to login)
 async function logoutAndRedirect() {
-    await supabase.auth.signOut();
+    await window.supabase.auth.signOut();
     window.location.href = 'index.html';
 }
 
 // Check authentication and redirect if not logged in
 async function requireAuth(allowedRoles = ['user', 'admin']) {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await window.supabase.auth.getSession();
     if (!session) {
         window.location.href = 'index.html';
         return null;
     }
-    const { data: profile, error } = await supabase
+    const { data: profile, error } = await window.supabase
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
         .single();
     if (error || !profile) {
-        await supabase.auth.signOut();
+        await window.supabase.auth.signOut();
         window.location.href = 'index.html';
         return null;
     }
     if (!profile.approved && profile.role !== 'admin') {
         showToast("Your account is pending approval.", "error");
-        await supabase.auth.signOut();
+        await window.supabase.auth.signOut();
         window.location.href = 'index.html';
         return null;
     }

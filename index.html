@@ -38,6 +38,15 @@
         </div>
     </div>
     <script>
+        // Wait for DOM and ensure supabase is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!window.supabase) {
+                document.getElementById('loginError').innerText = 'System error: Supabase not initialized. Please refresh.';
+                document.getElementById('loginError').classList.remove('hidden');
+                return;
+            }
+        });
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value;
@@ -45,7 +54,7 @@
             const errorDiv = document.getElementById('loginError');
             errorDiv.classList.add('hidden');
             
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const { error } = await window.supabase.auth.signInWithPassword({ email, password });
             if (error) {
                 errorDiv.innerText = error.message;
                 errorDiv.classList.remove('hidden');
@@ -54,22 +63,22 @@
             }
             
             // Fetch profile to check approval and role
-            const { data: { session } } = await supabase.auth.getSession();
-            const { data: profile, error: profileError } = await supabase
+            const { data: { session } } = await window.supabase.auth.getSession();
+            const { data: profile, error: profileError } = await window.supabase
                 .from('profiles')
                 .select('role, approved')
                 .eq('id', session.user.id)
                 .single();
                 
             if (profileError || !profile) {
-                await supabase.auth.signOut();
+                await window.supabase.auth.signOut();
                 errorDiv.innerText = 'Profile not found. Please contact support.';
                 errorDiv.classList.remove('hidden');
                 return;
             }
             
             if (!profile.approved && profile.role !== 'admin') {
-                await supabase.auth.signOut();
+                await window.supabase.auth.signOut();
                 errorDiv.innerText = 'Your account is pending admin approval.';
                 errorDiv.classList.remove('hidden');
                 showToast('Account not approved yet.', 'error');

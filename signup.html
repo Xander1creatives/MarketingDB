@@ -38,6 +38,15 @@
         </div>
     </div>
     <script>
+        // Wait for DOM and ensure supabase is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!window.supabase) {
+                document.getElementById('errorMsg').innerText = 'System error: Supabase not initialized. Please refresh.';
+                document.getElementById('errorMsg').classList.remove('hidden');
+                return;
+            }
+        });
+
         const form = document.getElementById('signupForm');
         const submitBtn = document.getElementById('submitBtn');
         const errorDiv = document.getElementById('errorMsg');
@@ -61,7 +70,7 @@
 
             try {
                 // 1. Create auth user
-                const { data: authData, error: signUpError } = await supabase.auth.signUp({ 
+                const { data: authData, error: signUpError } = await window.supabase.auth.signUp({ 
                     email, 
                     password,
                     options: {
@@ -76,7 +85,7 @@
                 }
 
                 // 2. Insert profile (pending approval)
-                const { error: profileError } = await supabase
+                const { error: profileError } = await window.supabase
                     .from('profiles')
                     .insert([{
                         id: authData.user.id,
@@ -89,7 +98,6 @@
 
                 if (profileError) {
                     console.error('Profile insert error:', profileError);
-                    // If profile insert fails, we should clean up the auth user? But for simplicity, show error.
                     throw new Error('Account created but profile setup failed. Please contact support.');
                 }
 
