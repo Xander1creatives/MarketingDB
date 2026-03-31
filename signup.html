@@ -38,15 +38,6 @@
         </div>
     </div>
     <script>
-        // Wait for DOM and ensure supabase is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            if (!window.supabase) {
-                document.getElementById('errorMsg').innerText = 'System error: Supabase not initialized. Please refresh.';
-                document.getElementById('errorMsg').classList.remove('hidden');
-                return;
-            }
-        });
-
         const form = document.getElementById('signupForm');
         const submitBtn = document.getElementById('submitBtn');
         const errorDiv = document.getElementById('errorMsg');
@@ -98,6 +89,8 @@
 
                 if (profileError) {
                     console.error('Profile insert error:', profileError);
+                    // If profile insert fails, the auth user exists but profile is missing.
+                    // Provide instructions to contact support.
                     throw new Error('Account created but profile setup failed. Please contact support.');
                 }
 
